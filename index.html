@@ -30,8 +30,9 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--acc);outline-offset
 .it.on .chk{background:var(--acc)}
 #lb{position:fixed;inset:0;background:#000e;display:none;z-index:10;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
 #lb.open{display:flex}
-#stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+#stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
 #stage img,#stage video{max-width:100%;max-height:100%}
+.ld{position:absolute;color:#fffa}
 #lb .tools{display:flex;justify-content:space-between;gap:8px;padding:10px 14px}
 #lb button{color:#fff;border-color:#fff8}
 #msg{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;display:none;z-index:20;max-width:90%;text-align:center}
@@ -89,7 +90,7 @@ fetch(MAC + "/", {headers: {Accept: "application/json"}}).then(r => r.json()).th
 function draw() {
   $("grid").innerHTML = items.map((it, i) =>
     `<button class="it" data-i="${i}" aria-label="${it.t === "video" ? "Film" : "Zdjęcie"} ${i + 1}">
-      <img src="${MAC}/miniatury/${encodeURIComponent(it.name)}.jpg" data-o="${it.url}" data-v="${it.t === "video" ? 1 : 0}" loading="lazy" decoding="async" alt="" onerror="fb(this)">
+      <img src="miniatury/${encodeURIComponent(it.name)}.jpg" data-o="${it.url}" data-v="${it.t === "video" ? 1 : 0}" loading="lazy" decoding="async" alt="" onerror="fb(this)">
       ${it.t === "video" ? '<span class="play">▶ film</span>' : ""}<span class="chk">✓</span></button>`).join("");
   upd();
 }
@@ -157,7 +158,7 @@ function open(i) {
   cur = i; const it = items[i];
   $("stage").innerHTML = it.t === "video"
     ? `<video src="${it.url}" controls playsinline autoplay></video>`
-    : `<img src="${it.url}" alt="">`;
+    : `<span class="ld">Ładuję…</span><img src="podglad/${encodeURIComponent(it.name)}.jpg" alt="" onload="this.previousElementSibling.remove()" onerror="this.onerror=null;this.src='${it.url}'">`;
   $("lb").classList.add("open");
   reset();
 }
