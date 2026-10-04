@@ -157,7 +157,7 @@ function fb(img) {
 function open(i) {
   cur = i; const it = items[i];
   $("stage").innerHTML = it.t === "video"
-    ? `<video src="${it.url}" controls playsinline autoplay></video>`
+    ? `<video src="${MAC}/filmy/${encodeURIComponent(it.name)}.mp4" controls playsinline autoplay onerror="this.onerror=null;this.src='${it.url}'"></video>`
     : `<span class="ld">Ładuję…</span><img src="podglad/${encodeURIComponent(it.name)}.jpg" alt="" onload="this.previousElementSibling.remove()" onerror="this.onerror=null;this.src='${it.url}'">`;
   $("lb").classList.add("open");
   reset();
