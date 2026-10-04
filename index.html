@@ -89,9 +89,8 @@ fetch(MAC + "/", {headers: {Accept: "application/json"}}).then(r => r.json()).th
 function draw() {
   $("grid").innerHTML = items.map((it, i) =>
     `<button class="it" data-i="${i}" aria-label="${it.t === "video" ? "Film" : "Zdjęcie"} ${i + 1}">
-      ${it.t === "video"
-        ? `<video src="${it.url}#t=1" preload="metadata" muted playsinline></video><span class="play">▶ film</span>`
-        : `<img src="${MAC}/miniatury/${encodeURIComponent(it.name.replace(/\.[^.]+$/, ""))}.jpg" data-o="${it.url}" loading="lazy" decoding="async" alt="" onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.dataset.o}">`}<span class="chk">✓</span></button>`).join("");
+      <img src="${MAC}/miniatury/${encodeURIComponent(it.name)}.jpg" data-o="${it.url}" data-v="${it.t === "video" ? 1 : 0}" loading="lazy" decoding="async" alt="" onerror="fb(this)">
+      ${it.t === "video" ? '<span class="play">▶ film</span>' : ""}<span class="chk">✓</span></button>`).join("");
   upd();
 }
 $("grid").onclick = e => {
@@ -144,6 +143,13 @@ async function getFile(it) {
   if (!r.ok) throw 0;
   const b = await r.blob();
   return new File([b], it.name, {type: b.type || (it.t === "video" ? "video/mp4" : "image/jpeg")});
+}
+
+// Gdy brak miniatury: zdjęcie ładuje oryginał, film pokazuje pierwszą klatkę
+function fb(img) {
+  if (img.dataset.f) return; img.dataset.f = 1;
+  if (img.dataset.v === "1") { const v = document.createElement("video"); v.src = img.dataset.o + "#t=1"; v.preload = "metadata"; v.muted = true; v.playsInline = true; img.replaceWith(v); }
+  else img.src = img.dataset.o;
 }
 
 // Podgląd
