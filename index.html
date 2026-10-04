@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kasia i Mirek – 26.09.2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1ef;--ink:#1f3a32;--soft:#5d726b;--acc:#b5707a;--card:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#14211d;--ink:#e8efec;--soft:#9bb0a8;--acc:#d68d97;--card:#1d2e29}}
+*{box-sizing:border-box}
+html{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Work Sans",system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{padding:56px 20px 28px;text-align:center}
+h1{font:italic 500 clamp(40px,9vw,76px)/1.05 "Cormorant Garamond",Georgia,serif;margin:0}
+header p{color:var(--soft);margin:12px auto 0;max-width:34em}
+.bar{position:sticky;top:env(safe-area-inset-top);z-index:5;background:var(--bg);display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid color-mix(in srgb,var(--ink) 15%,transparent)}
+button{font:inherit;cursor:pointer;border:1px solid var(--ink);background:transparent;color:var(--ink);padding:9px 16px;border-radius:999px}
+button.main{background:var(--acc);border-color:var(--acc);color:#fff}
+button:disabled{opacity:.45}
+button:focus-visible,a:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+#count{color:var(--soft);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px;padding:4px}
+.it{position:relative;aspect-ratio:1;background:var(--card);overflow:hidden;cursor:pointer;border:0;padding:0;border-radius:0}
+.it img,.it video{width:100%;height:100%;object-fit:cover;display:block}
+.it .play{position:absolute;left:8px;bottom:8px;background:#000a;color:#fff;border-radius:999px;padding:2px 10px;font-size:13px}
+.it .chk{position:absolute;right:8px;top:8px;width:26px;height:26px;border-radius:50%;border:2px solid #fff;background:#0005;display:none;color:#fff;align-items:center;justify-content:center}
+.sel .it .chk{display:flex}
+.it.on{outline:4px solid var(--acc);outline-offset:-4px}
+.it.on .chk{background:var(--acc)}
+#lb{position:fixed;inset:0;background:#000e;display:none;z-index:10;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+#lb.open{display:flex}
+#stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+#stage img,#stage video{max-width:100%;max-height:100%}
+#lb .tools{display:flex;justify-content:space-between;gap:8px;padding:10px 14px}
+#lb button{color:#fff;border-color:#fff8}
+#msg{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;display:none;z-index:20;max-width:90%;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>Kasia i Mirek</h1>
+  <p>26.09.2026 – zdjęcia i filmy z naszego ślubu. Dziękujemy, że byliście z nami.</p>
+</header>
+<div class="bar">
+  <button id="selBtn">Zaznacz</button>
+  <span id="count"></span>
+  <button id="saveBtn" class="main" hidden></button>
+</div>
+<main id="grid" class="grid"></main>
+
+<div id="lb" role="dialog" aria-modal="true" aria-label="Podgląd">
+  <div class="tools">
+    <button id="close">Zamknij</button>
+    <button id="one">Zapisz</button>
+  </div>
+  <div id="stage"></div>
+  <div class="tools">
+    <button id="prev" aria-label="Poprzednie">‹</button>
+    <button id="next" aria-label="Następne">›</button>
+  </div>
+</div>
+<div id="msg" role="status"></div>
+
+<script>
+// ===== USTAWIENIA: wpisz adres Maca z Tailscale Funnel (bez ukośnika na końcu) =====
+const MAC = "https://mac-mini-oliwier.taila053ba.ts.net";
+const BATCH = 15; // tyle plików naraz do galerii telefonu
+// ===================================================================================
+
+const $ = id => document.getElementById(id);
+let items = [], sel = new Set(), selMode = false, cur = 0, ready = null;
+const canShare = f => navigator.canShare && navigator.canShare({files: [f]});
+const isPhone = (() => { try { return canShare(new File([""], "a.jpg", {type: "image/jpeg"})); } catch { return false; } })();
+const BATCH_MB = 300; // limit rozmiaru jednej partii do galerii telefonu
+const fileUrl = it => it.url;
+const VID = /\.(mp4|mov|m4v)$/i, IMG = /\.(jpe?g|png|webp|gif|heic)$/i;
+const say = t => { const m = $("msg"); m.textContent = t; m.style.display = "block"; clearTimeout(say.k); say.k = setTimeout(() => m.style.display = "none", 4000); };
+
+// Lista plików pochodzi prosto z Maca (Caddy z "browse"), nie trzeba żadnych skryptów.
+fetch(MAC + "/", {headers: {Accept: "application/json"}}).then(r => r.json()).then(d => {
+  items = d.filter(f => !f.is_dir && !f.name.startsWith("."))
+    .map(f => ({name: f.name, size: f.size, url: MAC + "/" + encodeURIComponent(f.name),
+      t: VID.test(f.name) ? "video" : IMG.test(f.name) ? "photo" : null}))
+    .filter(f => f.t).sort((a, b) => a.name.localeCompare(b.name, "pl", {numeric: true}));
+  draw();
+}).catch(() => say("Nie udało się połączyć z serwerem. Spróbuj za chwilę."));
+
+function draw() {
+  $("grid").innerHTML = items.map((it, i) =>
+    `<button class="it" data-i="${i}" aria-label="${it.t === "video" ? "Film" : "Zdjęcie"} ${i + 1}">
+      ${it.t === "video"
+        ? `<video src="${it.url}#t=1" preload="metadata" muted playsinline></video><span class="play">▶ film</span>`
+        : `<img src="${MAC}/miniatury/${encodeURIComponent(it.name.replace(/\.[^.]+$/, ""))}.jpg" data-o="${it.url}" loading="lazy" decoding="async" alt="" onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.dataset.o}">`}<span class="chk">✓</span></button>`).join("");
+  upd();
+}
+$("grid").onclick = e => {
+  const b = e.target.closest(".it"); if (!b) return;
+  const i = +b.dataset.i;
+  if (selMode) { sel.has(i) ? sel.delete(i) : sel.add(i); b.classList.toggle("on"); ready = null; upd(); }
+  else open(i);
+};
+$("selBtn").onclick = () => {
+  selMode = !selMode; document.body.classList.toggle("sel", selMode);
+  $("selBtn").textContent = selMode ? "Gotowe" : "Zaznacz";
+  if (!selMode) { sel.clear(); ready = null; document.querySelectorAll(".it.on").forEach(e => e.classList.remove("on")); }
+  upd();
+};
+function upd() {
+  $("count").textContent = selMode ? `Zaznaczone: ${sel.size}` : `${items.length} plików`;
+  const s = $("saveBtn");
+  s.hidden = !(selMode && isPhone);
+  s.disabled = sel.size === 0;
+  s.textContent = ready ? `Zapisz w galerii (${ready.length})` : "Przygotuj zaznaczone";
+}
+
+// Dwa kroki, bo iPhone wymaga dotknięcia tuż przed otwarciem okna zapisu.
+$("saveBtn").onclick = async () => {
+  if (ready) {
+    try { await navigator.share({files: ready}); say("Wybierz „Zapisz obrazy” lub „Zapisz wideo”."); }
+    catch (e) { if (e.name !== "AbortError") say("Nie udało się zapisać. Spróbuj z mniejszą liczbą plików."); }
+    return;
+  }
+  const picks = []; let mb = 0;
+  for (const i of [...sel].sort((a, b) => a - b)) {
+    const m = items[i].size / 1048576;
+    if (picks.length && (picks.length >= BATCH || mb + m > BATCH_MB)) break;
+    picks.push(i); mb += m;
+  }
+  if (picks.length < sel.size) say("Telefon zapisze część naraz. Resztę zaznacz po zapisaniu tych.");
+  $("saveBtn").disabled = true;
+  try {
+    const files = [];
+    for (let n = 0; n < picks.length; n++) {
+      $("saveBtn").textContent = `Pobieram ${n + 1} z ${picks.length}…`;
+      files.push(await getFile(items[picks[n]]));
+    }
+    ready = files;
+  } catch { say("Nie udało się pobrać plików. Sprawdź internet i spróbuj ponownie."); }
+  $("saveBtn").disabled = false; upd();
+};
+async function getFile(it) {
+  const r = await fetch(fileUrl(it));
+  if (!r.ok) throw 0;
+  const b = await r.blob();
+  return new File([b], it.name, {type: b.type || (it.t === "video" ? "video/mp4" : "image/jpeg")});
+}
+
+// Podgląd
+function open(i) {
+  cur = i; const it = items[i];
+  $("stage").innerHTML = it.t === "video"
+    ? `<video src="${it.url}" controls playsinline autoplay></video>`
+    : `<img src="${it.url}" alt="">`;
+  $("lb").classList.add("open");
+  reset();
+}
+function shut() { $("lb").classList.remove("open"); $("stage").innerHTML = ""; }
+$("close").onclick = shut;
+$("prev").onclick = () => open((cur + items.length - 1) % items.length);
+$("next").onclick = () => open((cur + 1) % items.length);
+$("one").onclick = async () => {
+  const it = items[cur];
+  if (!isPhone) { location.href = fileUrl(it) + "?dl=1"; return; }
+  $("one").disabled = true; $("one").textContent = "Pobieram…";
+  try { ready = null; const f = await getFile(it); $("one").textContent = "Zapisz w galerii"; $("one").disabled = false;
+    $("one").onclick = async () => { try { await navigator.share({files: [f]}); } catch {} reset(); };
+  } catch { say("Nie udało się pobrać pliku."); reset(); }
+};
+function reset() { $("one").textContent = "Zapisz"; $("one").disabled = false; $("one").onclick = oneClick; }
+const oneClick = $("one").onclick;
+document.addEventListener("keydown", e => {
+  if (!$("lb").classList.contains("open")) return;
+  if (e.key === "Escape") shut();
+  if (e.key === "ArrowRight") $("next").click();
+  if (e.key === "ArrowLeft") $("prev").click();
+});
+let x0 = 0;
+$("stage").addEventListener("touchstart", e => x0 = e.touches[0].clientX, {passive: true});
+$("stage").addEventListener("touchend", e => { const d = e.changedTouches[0].clientX - x0; if (Math.abs(d) > 60) $(d < 0 ? "next" : "prev").click(); });
+</script>
+</body>
+</html>
