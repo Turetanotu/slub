@@ -20,6 +20,8 @@ button.main{background:var(--acc);border-color:var(--acc);color:#fff}
 button:disabled{opacity:.45}
 button:focus-visible,a:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
 #count{color:var(--soft);font-size:14px}
+.off{grid-column:1/-1;text-align:center;padding:64px 20px;color:var(--soft);font-size:18px}
+.off b{color:var(--ink);font:italic 500 28px "Cormorant Garamond",Georgia,serif}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px;padding:4px}
 .it{position:relative;aspect-ratio:1;background:var(--card);overflow:hidden;cursor:pointer;border:0;padding:0;border-radius:0}
 .it img,.it video{width:100%;height:100%;object-fit:cover;display:block}
@@ -79,13 +81,23 @@ const VID = /\.(mp4|mov|m4v)$/i, IMG = /\.(jpe?g|png|webp|gif|heic)$/i;
 const say = t => { const m = $("msg"); m.textContent = t; m.style.display = "block"; clearTimeout(say.k); say.k = setTimeout(() => m.style.display = "none", 4000); };
 
 // Lista plików pochodzi prosto z Maca (Caddy z "browse"), nie trzeba żadnych skryptów.
-fetch(MAC + "/", {headers: {Accept: "application/json"}}).then(r => r.json()).then(d => {
+fetch(MAC + "/", {headers: {Accept: "application/json"}, signal: AbortSignal.timeout(8000)}).then(r => r.json()).then(d => {
   items = d.filter(f => !f.is_dir && !f.name.startsWith("."))
     .map(f => ({name: f.name, size: f.size, url: MAC + "/" + encodeURIComponent(f.name),
       t: VID.test(f.name) ? "video" : IMG.test(f.name) ? "photo" : null}))
     .filter(f => f.t).sort((a, b) => a.name.localeCompare(b.name, "pl", {numeric: true}));
   draw();
-}).catch(() => say("Nie udało się połączyć z serwerem. Spróbuj za chwilę."));
+}).catch(offline);
+
+// Mac wyłącza się na noc (22:00-6:00), wtedy pokazujemy komunikat zamiast pustej strony
+function offline() {
+  const h = +new Intl.DateTimeFormat("en-GB", {hour: "numeric", hourCycle: "h23", timeZone: "Europe/Warsaw"}).format(new Date());
+  const night = h >= 22 || h < 6;
+  $("grid").innerHTML = night
+    ? '<div class="off"><b>Przerwa nocna 🌙</b><br>Galeria śpi od 22:00 do 6:00. Zajrzyj do nas rano!</div>'
+    : '<div class="off"><b>Galeria jest chwilowo niedostępna</b><br>Spróbuj ponownie za kilka minut.</div>';
+  $("count").textContent = ""; $("selBtn").hidden = true;
+}
 
 function draw() {
   $("grid").innerHTML = items.map((it, i) =>
